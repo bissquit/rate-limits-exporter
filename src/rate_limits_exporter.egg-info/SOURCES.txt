@@ -1,0 +1,7 @@
+README.md
+setup.py
+src/rate_limits_exporter.egg-info/PKG-INFO
+src/rate_limits_exporter.egg-info/SOURCES.txt
+src/rate_limits_exporter.egg-info/dependency_links.txt
+src/rate_limits_exporter.egg-info/requires.txt
+src/rate_limits_exporter.egg-info/top_level.txt
