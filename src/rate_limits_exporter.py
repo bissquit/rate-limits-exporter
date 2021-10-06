@@ -33,7 +33,9 @@ class Checker:
             for username, password in app['accounts_dict'].items():
                 rate_limits, tokens = await self.handle_request_and_return_rate_limit(username, password, tokens)
                 if rate_limits.status == 200:
-                    metrics_dict = self.fill_metrics(username=username, headers=rate_limits.headers, metrics_dict=metrics_dict)
+                    metrics_dict = self.fill_metrics(username=username,
+                                                     headers=rate_limits.headers,
+                                                     metrics_dict=metrics_dict)
                 else:
                     metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 1\n'
             metrics_str = ''
@@ -54,9 +56,14 @@ class Checker:
         async with aiohttp.ClientSession(auth=auth) as client:
             async with client.get(self.token_url) as r:
                 logger.debug(f'Getting token. Request status: {r.status}')
-                # assert r.status == 200
-                json_body = await r.json()
-        return json_body['token']
+                print(r)
+                if r.status == 200:
+                    json_body = await r.json()
+                    token_str = json_body['token']
+                else:
+                    # we have to return token even it's an empty string
+                    token_str = ''
+        return token_str
 
     async def get_rate_limit(self, token):
         """
@@ -71,7 +78,6 @@ class Checker:
             # towards the limit; using HEAD will not
             async with client.head(self.limits_url) as r:
                 logger.debug(f'Checking ratelimits. Request status: {r.status}. Request headers: {r.headers}')
-                # assert r.status == 200
         return r
 
     async def handle_request_and_return_rate_limit(self, username, password, tokens):
@@ -118,10 +124,9 @@ class Checker:
 # a Request instance as its only parameter...
 async def metrics_handler(request):
     # ... and returns a Response instance
-    return web.Response(text=request.app['metrics'])
+    return web.Response(text=request.app['metrics_str'])
 
 
-# https://docs.aiohttp.org/en/stable/web_advanced.html#background-tasks
 async def start_background_tasks(app):
     app['rate_limits_checker'] = asyncio.create_task(Checker().entrypoint(app))
 
@@ -136,19 +141,19 @@ def read_files_with_secrets(path):
     :param path: each filename in the directory is a DockerHub account name. File data is a password
     :return: dict with username : password pairs or empty dict if directory is empty
     """
-    accounts = {}
-    files = os.listdir(path=path)
-    for file in files:
-        full_file_path = f'{path}/{file}'
+    accounts_dict = {}
+    files_list = os.listdir(path=path)
+    for file_name in files_list:
+        full_file_path = f'{path}/{file_name}'
         logger.debug(f'Reading file {full_file_path}')
         # read file data with trailing characters removed
         file_data = open(full_file_path).read().rstrip()
-        accounts[file] = file_data
-    if not accounts:
+        accounts_dict[file_name] = file_data
+    if not accounts_dict:
         logger.debug(f'Directory {path} is empty. Skipping reading files. DockerHub limits will be checked for external ip')
-        # we shouldn't return empty dict if dir is empty. The dict {'': ''} is not empty
-        accounts = {'': ''}
-    return accounts
+        # we have not to return empty dict if dir is empty. The dict {'': ''} is not empty
+        accounts_dict = {'': ''}
+    return accounts_dict
 
 
 def main():
@@ -159,6 +164,7 @@ def main():
     app['metrics_str'] = 'Initialization'
     app['args'] = args
     app.add_routes([web.get('/metrics', metrics_handler)])
+    # https://docs.aiohttp.org/en/stable/web_advanced.html#background-tasks
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     web.run_app(app, port=args.port)
