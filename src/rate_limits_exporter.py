@@ -26,23 +26,22 @@ class Checker:
     async def entrypoint(self, app):
         tokens = {}
         # fill accounts with empty tokens (they will be renewed in further)
-        for account in app['accounts']:
+        for account in app['accounts_dict']:
             tokens = {account: ''}
         while True:
-            metrics_ratelimit_current = f'# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
-            metrics_ratelimit_current += f'# TYPE dockerhub_ratelimit_current gauge\n'
-            metrics_ratelimit_remaining = f'# HELP dockerhub_ratelimit_remaining Remaining limit for DockerHub account (or for ip address if anonymous access)\n'
-            metrics_ratelimit_remaining += f'# TYPE dockerhub_ratelimit_remaining gauge\n'
-            for username, password in app['accounts'].items():
+            metrics_dict = self.fill_metrics_help({})
+            for username, password in app['accounts_dict'].items():
                 rate_limits, tokens = await self.handle_request_and_return_rate_limit(username, password, tokens)
-                # headers strings look like 100;w=21600. We need the first number
-                ratelimit_limit = re.search('^\d*', rate_limits.headers['ratelimit-limit']).group()
-                ratelimit_remaining = re.search('^\d*', rate_limits.headers['ratelimit-remaining']).group()
-                metrics_ratelimit_current += f'dockerhub_ratelimit_current{{dockerhub_user="{username}"}} {ratelimit_limit}\n'
-                metrics_ratelimit_remaining += f'dockerhub_ratelimit_remaining{{dockerhub_user="{username}"}} {ratelimit_remaining}\n'
+                if rate_limits.status == 200:
+                    metrics_dict = self.fill_metrics(username=username, headers=rate_limits.headers, metrics_dict=metrics_dict)
+                else:
+                    metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 1\n'
+            metrics_str = ''
+            for metric_name, metric_value in metrics_dict.items():
+                metrics_str += metric_value
             # I don't know workaround yet but:
             # DeprecationWarning: Changing state of started or joined application is deprecated
-            app['metrics'] = metrics_ratelimit_current + metrics_ratelimit_remaining
+            app['metrics_str'] = metrics_str
             await asyncio.sleep(app['args'].time)
 
     async def get_token(self, username, password):
@@ -95,6 +94,24 @@ class Checker:
                 logger.warning(f'Can\'t check ratelimits. Status code: {status}')
         return rate_limits, tokens
 
+    def fill_metrics_help(self, metrics_dict):
+        metrics_dict['dockerhub_ratelimit_current'] = f'# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
+        metrics_dict['dockerhub_ratelimit_current'] += f'# TYPE dockerhub_ratelimit_current gauge\n'
+        metrics_dict['dockerhub_ratelimit_remaining'] = f'# HELP dockerhub_ratelimit_remaining Remaining limit for DockerHub account (or for ip address if anonymous access)\n'
+        metrics_dict['dockerhub_ratelimit_remaining'] += f'# TYPE dockerhub_ratelimit_remaining gauge\n'
+        metrics_dict['dockerhub_ratelimit_scrape_error'] = f'# HELP dockerhub_ratelimit_scrape_error Scrape errors (wrong status code or something else)\n'
+        metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
+        return metrics_dict
+
+    def fill_metrics(self, username, headers, metrics_dict):
+        # headers strings look like 100;w=21600. We need the first number
+        ratelimit_limit = re.search('^\d*', headers['ratelimit-limit']).group()
+        ratelimit_remaining = re.search('^\d*', headers['ratelimit-remaining']).group()
+        metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{username}"}} {ratelimit_limit}\n'
+        metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{username}"}} {ratelimit_remaining}\n'
+        metrics_dict['dockerhub_ratelimit_scrape_error'] = f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 0\n'
+        return metrics_dict
+
 
 # https://docs.aiohttp.org/en/stable/web_quickstart.html#handler
 # A request handler must be a coroutine that accepts
@@ -138,8 +155,8 @@ def main():
     args = parse_args()
     app = web.Application()
     # For storing global-like variables, feel free to save them in an Application instance
-    app['accounts'] = read_files_with_secrets(args.directory)
-    app['metrics'] = 'Initialization'
+    app['accounts_dict'] = read_files_with_secrets(args.directory)  # {'username1': 'password1', {username2}: ...}
+    app['metrics_str'] = 'Initialization'
     app['args'] = args
     app.add_routes([web.get('/metrics', metrics_handler)])
     app.on_startup.append(start_background_tasks)
