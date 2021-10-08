@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='rate_limits_exporter', description='Docker HUB ratelimits exporter for Prometheus')
+    # parser.add_argument('-d', '--directory', default='/tmp/dockerhub-users', type=str, help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
     parser.add_argument('-d', '--directory', default='/opt', type=str, help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
     parser.add_argument('-p', '--port', default=8080, type=int, help='Port to be listened (default: 8080)')
     parser.add_argument('-t', '--time', default=15, type=int, help='Default loop interval in seconds (default: 15)')
@@ -33,9 +34,7 @@ class Checker:
             for username, password in app['accounts_dict'].items():
                 rate_limits, tokens = await self.handle_request_and_return_rate_limit(username, password, tokens)
                 if rate_limits.status == 200:
-                    metrics_dict = self.fill_metrics(username=username,
-                                                     headers=rate_limits.headers,
-                                                     metrics_dict=metrics_dict)
+                    metrics_dict = self.fill_metrics(username=username, headers=rate_limits.headers, metrics_dict=metrics_dict)
                 else:
                     metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 1\n'
             metrics_str = ''
@@ -55,8 +54,7 @@ class Checker:
 
         async with aiohttp.ClientSession(auth=auth) as client:
             async with client.get(self.token_url) as r:
-                logger.debug(f'Getting token. Request status: {r.status}')
-                print(r)
+                logger.debug(f'Getting token for {username if username else "Anonymous"} user. Request status: {r.status}')
                 if r.status == 200:
                     json_body = await r.json()
                     token_str = json_body['token']
@@ -73,9 +71,8 @@ class Checker:
         """
         headers = {'Authorization': f'Bearer {token}'}
         async with aiohttp.ClientSession(headers=headers) as client:
-            # Headers will be returned on both GET and HEAD requests.
-            # Note that using GET emulates a real pull and will count
-            # towards the limit; using HEAD will not
+            # Headers will be returned on both GET and HEAD requests. Note that using GET
+            # emulates a real pull and will count towards the limit; using HEAD will not
             async with client.head(self.limits_url) as r:
                 logger.debug(f'Checking ratelimits. Request status: {r.status}. Request headers: {r.headers}')
         return r
@@ -88,11 +85,11 @@ class Checker:
             status = rate_limits.status
             # if token is old...
             if status == 401:
-                # ... then we need to renew it
+                # ... then we need to renew it. We have to get token even for Anonymous user
                 tokens[username] = await self.get_token(username=username, password=password)
                 # if the first attempt to renew token was unsuccessful so creds are invalid
-                if attempt == 2:
-                    logger.warning('Username/password pair is wrong!')
+                if attempt == 1:
+                    logger.warning(f'Username/password pair of user {username} is wrong!')
                 continue
             elif status == 200:
                 break
