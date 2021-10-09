@@ -11,11 +11,21 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog='rate_limits_exporter', description='Docker HUB ratelimits exporter for Prometheus')
-    # parser.add_argument('-d', '--directory', default='/tmp/dockerhub-users', type=str, help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
-    parser.add_argument('-d', '--directory', default='/opt', type=str, help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
-    parser.add_argument('-p', '--port', default=8080, type=int, help='Port to be listened (default: 8080)')
-    parser.add_argument('-t', '--time', default=15, type=int, help='Default loop interval in seconds (default: 15)')
+    # You may either use command line argument or env variables
+    parser = argparse.ArgumentParser(prog='rate_limits_exporter',
+                                     description='Docker Hub rate limits exporter for Prometheus')
+    parser.add_argument('-d', '--directory',
+                        default=os.getenv('APP_SECRETS_DIR', '/opt/secrets'),
+                        type=str,
+                        help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
+    parser.add_argument('-p', '--port',
+                        default=os.getenv("APP_PORT", 8080),
+                        type=int,
+                        help='Port to be listened (default: 8080)')
+    parser.add_argument('-t', '--time',
+                        default=os.getenv("APP_LOOP_TIME", 15),
+                        type=int,
+                        help='Default loop interval in seconds (default: 15)')
     return parser.parse_args()
 
 
@@ -51,7 +61,7 @@ class Checker:
 
         async with aiohttp.ClientSession(auth=auth) as client:
             async with client.get(self.token_url) as r:
-                logger.debug(f'Getting token for {username if username else "Anonymous"} user. Request status: {r.status}')
+                logger.debug(f'Getting token for {self.set_username(username)} user. Request status: {r.status}')
                 if r.status == 200:
                     json_body = await r.json()
                     token_str = json_body['token']
@@ -83,16 +93,20 @@ class Checker:
             # if token is old (or if it's empty string)...
             if status == 401:
                 # ... then we need to renew it. We have to renew token even for Anonymous user
-                tokens[username] = await self.get_token(username=username, password=password)
+                tokens[username] = await self.get_token(username, password)
                 # if the first attempt to renew token was unsuccessful so creds are invalid
                 if attempt == 1:
-                    logger.warning(f'Username/password pair of user {username} is wrong!')
+                    logger.warning(f'Username/password pair of user {self.set_username(username)} is wrong!')
                 continue
             elif status == 200:
                 break
             else:
-                logger.warning(f'Can\'t check ratelimits. Status code: {status}')
+                logger.warning(f'Can\'t check rate limits for user {self.set_username(username)}. Status code: {status}')
         return rate_limits, tokens
+
+    @staticmethod
+    def set_username(username):
+        return username if username else "Anonymous"
 
     @staticmethod
     def get_dict_return_str_of_values(metrics_dict):
