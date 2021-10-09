@@ -77,12 +77,12 @@ class Checker:
     async def handle_request_and_return_rate_limit(self, username, password, tokens):
         rate_limits = ''
         for attempt in range(2):
-            # get ratelimits with current token
+            # get rate limits with current token
             rate_limits = await self.get_rate_limit(token=tokens[username])
             status = rate_limits.status
             # if token is old (or if it's empty string)...
             if status == 401:
-                # ... then we need to renew it. We have to get token even for Anonymous user
+                # ... then we need to renew it. We have to renew token even for Anonymous user
                 tokens[username] = await self.get_token(username=username, password=password)
                 # if the first attempt to renew token was unsuccessful so creds are invalid
                 if attempt == 1:
@@ -94,14 +94,16 @@ class Checker:
                 logger.warning(f'Can\'t check ratelimits. Status code: {status}')
         return rate_limits, tokens
 
-    def get_dict_return_str_of_values(self, metrics_dict):
+    @staticmethod
+    def get_dict_return_str_of_values(metrics_dict):
         metrics_str = ''
         # paste all item's values into one str
         for metric_name, metric_value in metrics_dict.items():
             metrics_str += metric_value
         return metrics_str
 
-    def fill_metrics_help(self, metrics_dict):
+    @staticmethod
+    def fill_metrics_help(metrics_dict):
         metrics_dict['dockerhub_ratelimit_current'] = f'# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
         metrics_dict['dockerhub_ratelimit_current'] += f'# TYPE dockerhub_ratelimit_current gauge\n'
         metrics_dict['dockerhub_ratelimit_remaining'] = f'# HELP dockerhub_ratelimit_remaining Remaining limit for DockerHub account (or for ip address if anonymous access)\n'
@@ -110,7 +112,8 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
-    def fill_metrics(self, username, headers, metrics_dict):
+    @staticmethod
+    def fill_metrics(username, headers, metrics_dict):
         # headers strings look like 100;w=21600. We need the first number
         ratelimit_limit = re.search('^\d*', headers['ratelimit-limit']).group()
         ratelimit_remaining = re.search('^\d*', headers['ratelimit-remaining']).group()
