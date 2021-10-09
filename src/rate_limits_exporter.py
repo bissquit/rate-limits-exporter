@@ -25,24 +25,21 @@ class Checker:
         self.limits_url = "https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest"
 
     async def entrypoint(self, app):
-        tokens = {}
+        tokens_dict = {}
         # fill accounts with empty tokens (they will be renewed in further)
         for account in app['accounts_dict']:
-            tokens = {account: ''}
+            tokens_dict = {account: ''}
         while True:
             metrics_dict = self.fill_metrics_help({})
             for username, password in app['accounts_dict'].items():
-                rate_limits, tokens = await self.handle_request_and_return_rate_limit(username, password, tokens)
+                rate_limits, tokens_dict = await self.handle_request_and_return_rate_limit(username, password, tokens_dict)
                 if rate_limits.status == 200:
-                    metrics_dict = self.fill_metrics(username=username, headers=rate_limits.headers, metrics_dict=metrics_dict)
+                    metrics_dict = self.fill_metrics(username, rate_limits.headers, metrics_dict)
                 else:
                     metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 1\n'
-            metrics_str = ''
-            for metric_name, metric_value in metrics_dict.items():
-                metrics_str += metric_value
             # I don't know workaround yet but:
             # DeprecationWarning: Changing state of started or joined application is deprecated
-            app['metrics_str'] = metrics_str
+            app['metrics_str'] = self.get_dict_return_str_of_values(metrics_dict)
             await asyncio.sleep(app['args'].time)
 
     async def get_token(self, username, password):
@@ -83,7 +80,7 @@ class Checker:
             # get ratelimits with current token
             rate_limits = await self.get_rate_limit(token=tokens[username])
             status = rate_limits.status
-            # if token is old...
+            # if token is old (or if it's empty string)...
             if status == 401:
                 # ... then we need to renew it. We have to get token even for Anonymous user
                 tokens[username] = await self.get_token(username=username, password=password)
@@ -96,6 +93,13 @@ class Checker:
             else:
                 logger.warning(f'Can\'t check ratelimits. Status code: {status}')
         return rate_limits, tokens
+
+    def get_dict_return_str_of_values(self, metrics_dict):
+        metrics_str = ''
+        # paste all item's values into one str
+        for metric_name, metric_value in metrics_dict.items():
+            metrics_str += metric_value
+        return metrics_str
 
     def fill_metrics_help(self, metrics_dict):
         metrics_dict['dockerhub_ratelimit_current'] = f'# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
@@ -135,7 +139,7 @@ async def cleanup_background_tasks(app):
 
 def read_files_with_secrets(path):
     """
-    :param path: each filename in the directory is a DockerHub account name. File data is a password
+    :param path: each filename in the directory have to be a DockerHub account name. File data is a password
     :return: dict with username : password pairs or empty dict if directory is empty
     """
     accounts_dict = {}
