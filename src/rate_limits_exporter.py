@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument('-t', '--time',
                         default=os.getenv("APP_LOOP_TIME", 60),
                         type=int,
-                        help='Default loop interval in seconds (default: 15)')
+                        help='Default time range in seconds to perform rate limits check (default: 60)')
     return parser.parse_args()
 
 
