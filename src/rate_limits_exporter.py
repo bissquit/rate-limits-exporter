@@ -126,14 +126,13 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
-    @staticmethod
-    def fill_metrics(username, headers, metrics_dict):
+    def fill_metrics(self, username, headers, metrics_dict):
         # headers strings look like 100;w=21600. We need the first number
         ratelimit_limit = re.search('^\d*', headers['ratelimit-limit']).group()
         ratelimit_remaining = re.search('^\d*', headers['ratelimit-remaining']).group()
-        metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{username}"}} {ratelimit_limit}\n'
-        metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{username}"}} {ratelimit_remaining}\n'
-        metrics_dict['dockerhub_ratelimit_scrape_error'] = f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 0\n'
+        metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_limit}\n'
+        metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_remaining}\n'
+        metrics_dict['dockerhub_ratelimit_scrape_error'] = f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 0\n'
         return metrics_dict
 
 
