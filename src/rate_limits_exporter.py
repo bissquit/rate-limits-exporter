@@ -93,12 +93,12 @@ class Checker:
                 tokens[username] = await self.get_token(username, password)
                 # if the first attempt to renew token was unsuccessful so creds are invalid
                 if attempt == 1:
-                    logger.warning(f'Username/password pair of user {self.set_username(username)} is wrong!')
+                    logger.warning(f'Username/password pair of {self.set_username(username)} user is wrong!')
                 continue
             elif status == 200:
                 break
             else:
-                logger.warning(f'Can\'t check rate limits for user {self.set_username(username)}. Status code: {status}')
+                logger.warning(f'Can\'t check rate limits for {self.set_username(username)} user. Status code: {status}')
         return rate_limits, tokens
 
     @staticmethod
@@ -140,11 +140,11 @@ class Checker:
             metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_limit}\n'
             metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_remaining}\n'
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 0\n'
-        # request may not contains rate limits headers for some reasons
+        # request may not contain rate limits headers for some reasons
         # even with 200 status code so we have to check it
         elif status == 200 and not bool_flag:
             logger.info(
-                f'Request doesn\'t contain appropriate headers. It means user {self.set_username(username)} hasn\'t rate limits for pulling images')
+                f'Request doesn\'t contain appropriate headers. It means {self.set_username(username)} user hasn\'t rate limits')
         else:
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 1\n'
         return metrics_dict
