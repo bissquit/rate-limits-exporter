@@ -43,10 +43,7 @@ class Checker:
             metrics_dict = self.fill_metrics_help({})
             for username, password in app['accounts_dict'].items():
                 rate_limits, tokens_dict = await self.handle_request_and_return_rate_limit(username, password, tokens_dict)
-                if rate_limits.status == 200:
-                    metrics_dict = self.fill_metrics(username, rate_limits.headers, metrics_dict)
-                else:
-                    metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{username}"}} 1\n'
+                metrics_dict = self.fill_metrics(username, rate_limits, metrics_dict)
             # I don't know workaround yet but:
             # DeprecationWarning: Changing state of started or joined application is deprecated
             app['metrics_str'] = self.get_dict_return_str_of_values(metrics_dict)
@@ -109,6 +106,13 @@ class Checker:
         return username if username else "Anonymous"
 
     @staticmethod
+    def limits_in_headers(headers):
+        bool_flag = False
+        if 'ratelimit-limit' in headers and 'ratelimit-remaining' in headers:
+            bool_flag = True
+        return bool_flag
+
+    @staticmethod
     def get_dict_return_str_of_values(metrics_dict):
         metrics_str = ''
         # paste all item's values into one str
@@ -126,13 +130,23 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
-    def fill_metrics(self, username, headers, metrics_dict):
-        # headers strings look like 100;w=21600. We need the first number
-        ratelimit_limit = re.search('^\d*', headers['ratelimit-limit']).group()
-        ratelimit_remaining = re.search('^\d*', headers['ratelimit-remaining']).group()
-        metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_limit}\n'
-        metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_remaining}\n'
-        metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 0\n'
+    def fill_metrics(self, username, request, metrics_dict):
+        status = request.status
+        bool_flag = self.limits_in_headers(request.headers)
+        if status == 200 and bool_flag:
+            # headers strings look like 100;w=21600. We need the first number
+            ratelimit_limit = re.search('^\d*', request.headers['ratelimit-limit']).group()
+            ratelimit_remaining = re.search('^\d*', request.headers['ratelimit-remaining']).group()
+            metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_limit}\n'
+            metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_remaining}\n'
+            metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 0\n'
+        # request may not contains rate limits headers for some reasons
+        # even with 200 status code so we have to check it
+        elif status == 200 and not bool_flag:
+            logger.info(
+                f'Request doesn\'t contain appropriate headers. It means user {self.set_username(username)} hasn\'t rate limits for pulling images')
+        else:
+            metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 1\n'
         return metrics_dict
 
 
