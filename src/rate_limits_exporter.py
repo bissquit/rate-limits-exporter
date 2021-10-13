@@ -82,23 +82,18 @@ class Checker:
         return r
 
     async def handle_request_and_return_rate_limit(self, username, password, tokens):
-        rate_limits = ''
-        for attempt in range(2):
-            # get rate limits with current token
-            rate_limits = await self.get_rate_limit(token=tokens[username])
-            status = rate_limits.status
-            # if token is old (or if it's empty string)...
-            if status == 401:
-                # ... then we need to renew it. We have to renew token even for Anonymous user
-                tokens[username] = await self.get_token(username, password)
-                # if the first attempt to renew token was unsuccessful so creds are invalid
-                if attempt == 1:
-                    logger.warning(f'Username/password pair of {self.set_username(username)} user is wrong!')
-                continue
-            elif status == 200:
-                break
-            else:
-                logger.warning(f'Can\'t check rate limits for {self.set_username(username)} user. Status code: {status}')
+        # we have to renew token before each request because for some reasons Docker Hub
+        # doesn't return required headers several minutes before token expiration
+        # while status code is 200 (not 401)
+        tokens[username] = await self.get_token(username, password)
+        rate_limits = await self.get_rate_limit(token=tokens[username])
+        status = rate_limits.status
+        if status == 200:
+            pass
+        elif status == 401:
+            logger.warning(f'Wrong token! Check username/password pair of {self.set_username(username)} user')
+        else:
+            logger.warning(f'Can\'t check rate limits for {self.set_username(username)} user. Status code: {status}')
         return rate_limits, tokens
 
     @staticmethod
@@ -143,8 +138,7 @@ class Checker:
         # request may not contain rate limits headers for some reasons
         # even with 200 status code so we have to check it
         elif status == 200 and not bool_flag:
-            logger.info(
-                f'Request doesn\'t contain appropriate headers. It means {self.set_username(username)} user hasn\'t rate limits')
+            logger.info(f'Request doesn\'t contain appropriate headers. It means {self.set_username(username)} user hasn\'t rate limits')
         else:
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 1\n'
         return metrics_dict
