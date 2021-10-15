@@ -55,10 +55,10 @@ class Checker:
             auth = aiohttp.BasicAuth(login=username, password=password)
         else:
             auth = None
-
         async with aiohttp.ClientSession(auth=auth) as client:
             async with client.get(self.token_url) as r:
-                logger.debug(f'Getting token for {self.set_username(username)} user. Request status: {r.status}')
+                logger.info(f'Getting token for {self.set_username(username)} user. Response status: {r.status}')
+                logger.debug(f'Full response: {r}')
                 if r.status == 200:
                     json_body = await r.json()
                     token_str = json_body['token']
@@ -78,7 +78,8 @@ class Checker:
             # Headers will be returned on both GET and HEAD requests. Note that using GET
             # emulates a real pull and will count towards the limit; using HEAD will not
             async with client.head(self.limits_url) as r:
-                logger.debug(f'Checking ratelimits. Request status: {r.status}. Request headers: {r.headers}')
+                logger.info(f'Checking ratelimits. Response status: {r.status}')
+                logger.debug(f'Full response: {r}')
         return r
 
     async def handle_request_and_return_rate_limit(self, username, password, tokens):
@@ -89,7 +90,7 @@ class Checker:
         rate_limits = await self.get_rate_limit(token=tokens[username])
         status = rate_limits.status
         if status == 200:
-            pass
+            logger.debug(f'Rate limits response returned successfully')
         elif status == 401:
             logger.warning(f'Wrong token! Check username/password pair of {self.set_username(username)} user')
         else:
@@ -129,6 +130,7 @@ class Checker:
         status = request.status
         bool_flag = self.limits_in_headers(request.headers)
         if status == 200 and bool_flag:
+            logger.debug(f'Response contains expected rate limits headers. Configuring metrics...')
             # headers strings look like 100;w=21600. We need the first number
             ratelimit_limit = re.search('^\d*', request.headers['ratelimit-limit']).group()
             ratelimit_remaining = re.search('^\d*', request.headers['ratelimit-remaining']).group()
@@ -138,8 +140,9 @@ class Checker:
         # request may not contain rate limits headers for some reasons
         # even with 200 status code so we have to check it
         elif status == 200 and not bool_flag:
-            logger.info(f'Request doesn\'t contain appropriate headers. It means {self.set_username(username)} user hasn\'t rate limits')
+            logger.info(f'Response doesn\'t contain expected headers. It means {self.set_username(username)} user hasn\'t rate limits')
         else:
+            logger.debug(f'Rate limits response returned with {status} status code. Can\'t fill metrics!')
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 1\n'
         return metrics_dict
 
@@ -170,12 +173,12 @@ def read_files_with_secrets(path):
     files_list = os.listdir(path=path)
     for file_name in files_list:
         full_file_path = f'{path}/{file_name}'
-        logger.debug(f'Reading file {full_file_path}')
+        logger.info(f'Reading file {full_file_path}')
         # read file data with trailing characters removed
         file_data = open(full_file_path).read().rstrip()
         accounts_dict[file_name] = file_data
     if not accounts_dict:
-        logger.debug(f'Directory {path} is empty. Skipping reading files. DockerHub limits will be checked for external ip')
+        logger.info(f'Directory {path} is empty. Skipping reading files. DockerHub limits will be checked for external ip')
         # we have not to return empty dict if dir is empty. The dict {'': ''} is not empty
         accounts_dict = {'': ''}
     return accounts_dict
