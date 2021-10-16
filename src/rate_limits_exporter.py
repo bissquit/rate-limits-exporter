@@ -42,71 +42,62 @@ class Checker:
         while True:
             metrics_dict = self.fill_metrics_help({})
             for username, password in app['accounts_dict'].items():
-                rate_limits, tokens_dict = await self.handle_request_and_return_rate_limit(username, password, tokens_dict)
-                metrics_dict = self.fill_metrics(username, rate_limits, metrics_dict)
+                # we have to renew token before each request because for some reasons Docker Hub
+                # doesn't return required headers several minutes before token expiration
+                # while status code is 200 (not 401)
+                tokens_dict[username] = await self.get_token(username, password)
+                headers_dict = await self.get_rate_limit(token=tokens_dict[username], username=username)
+                metrics_dict = self.fill_metrics(username, headers_dict, metrics_dict)
             # I don't know workaround yet but:
             # DeprecationWarning: Changing state of started or joined application is deprecated
             app['metrics_str'] = self.get_dict_return_str_of_values(metrics_dict)
             await asyncio.sleep(app['args'].time)
 
     async def get_token(self, username, password):
+        token_str = ''
         # Unauthenticated (anonymous) users will have the limits enforced via IP
         if username:
             auth = aiohttp.BasicAuth(login=username, password=password)
         else:
             auth = None
+
         async with aiohttp.ClientSession(auth=auth) as client:
-            async with client.get(self.token_url) as r:
-                logger.info(f'Getting token for {self.set_username(username)} user. Response status: {r.status}')
-                logger.debug(f'Full response: {r}')
-                if r.status == 200:
-                    json_body = await r.json()
-                    token_str = json_body['token']
-                else:
-                    # we have to return token even it's an empty string
-                    token_str = ''
+            try:
+                async with client.get(self.token_url) as r:
+                    status = r.status
+                    logger.info(f'Getting token for {self.set_username(username)} user')
+                    logger.debug(f'Full response: {r}')
+                    if status == 200:
+                        json_body = await r.json()
+                        token_str = json_body['token']
+                    else:
+                        logger.error(f'Cannot renew token for {self.set_username(username)} user! Response status: {status}')
+            except aiohttp.ClientConnectionError as error:
+                logger.error(f'Connection error during updating token: {error}')
         return token_str
 
-    async def get_rate_limit(self, token):
-        """
-        :param token: bearer token to insert into header
-        :return: CIMultiDictProxy object will be returned,
-        read more at https://docs.aiohttp.org/en/stable/client_reference.html?highlight=multidict#response-object
-        """
+    async def get_rate_limit(self, token, username):
+        headers_dict = {}
         headers = {'Authorization': f'Bearer {token}'}
         async with aiohttp.ClientSession(headers=headers) as client:
-            # Headers will be returned on both GET and HEAD requests. Note that using GET
-            # emulates a real pull and will count towards the limit; using HEAD will not
-            async with client.head(self.limits_url) as r:
-                logger.info(f'Checking ratelimits. Response status: {r.status}')
-                logger.debug(f'Full response: {r}')
-        return r
-
-    async def handle_request_and_return_rate_limit(self, username, password, tokens):
-        # we have to renew token before each request because for some reasons Docker Hub
-        # doesn't return required headers several minutes before token expiration
-        # while status code is 200 (not 401)
-        tokens[username] = await self.get_token(username, password)
-        rate_limits = await self.get_rate_limit(token=tokens[username])
-        status = rate_limits.status
-        if status == 200:
-            logger.debug(f'Rate limits response returned successfully')
-        elif status == 401:
-            logger.warning(f'Wrong token! Check username/password pair of {self.set_username(username)} user')
-        else:
-            logger.warning(f'Can\'t check rate limits for {self.set_username(username)} user. Status code: {status}')
-        return rate_limits, tokens
+            try:
+                # Headers will be returned on both GET and HEAD requests. Note that using GET
+                # emulates a real pull and will count towards the limit; using HEAD will not
+                async with client.head(self.limits_url) as r:
+                    status = r.status
+                    logger.info(f'Checking ratelimits. Response status: {status}')
+                    logger.debug(f'Full response: {r}')
+                    if status == 200:
+                        headers_dict = r.headers
+                    else:
+                        logger.error(f'Cannot get rate limits for {self.set_username(username)} user! Response status: {status}')
+            except aiohttp.ClientConnectionError as error:
+                logger.error(f'Connection error during getting rate limits: {error}')
+        return headers_dict
 
     @staticmethod
     def set_username(username):
         return username if username else "Anonymous"
-
-    @staticmethod
-    def limits_in_headers(headers):
-        bool_flag = False
-        if 'ratelimit-limit' in headers and 'ratelimit-remaining' in headers:
-            bool_flag = True
-        return bool_flag
 
     @staticmethod
     def get_dict_return_str_of_values(metrics_dict):
@@ -126,23 +117,22 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
-    def fill_metrics(self, username, request, metrics_dict):
-        status = request.status
-        bool_flag = self.limits_in_headers(request.headers)
-        if status == 200 and bool_flag:
-            logger.debug(f'Response contains expected rate limits headers. Configuring metrics...')
+    def fill_metrics(self, username, headers_dict, metrics_dict):
+        if 'ratelimit-limit' in headers_dict and 'ratelimit-remaining' in headers_dict:
+            logger.debug(f'Headers returned successfully. Configuring metrics...')
             # headers strings look like 100;w=21600. We need the first number
-            ratelimit_limit = re.search('^\d*', request.headers['ratelimit-limit']).group()
-            ratelimit_remaining = re.search('^\d*', request.headers['ratelimit-remaining']).group()
+            ratelimit_limit = re.search('^\d*', headers_dict['ratelimit-limit']).group()
+            ratelimit_remaining = re.search('^\d*', headers_dict['ratelimit-remaining']).group()
             metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_limit}\n'
             metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_remaining}\n'
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 0\n'
-        # request may not contain rate limits headers for some reasons
-        # even with 200 status code so we have to check it
-        elif status == 200 and not bool_flag:
-            logger.info(f'Response doesn\'t contain expected headers. It means {self.set_username(username)} user hasn\'t rate limits')
+        # not empty but without expected headers
+        elif headers_dict:
+            # request may not contain rate limits headers for some reasons
+            # even with 200 status code so we have to check it
+            logger.info(f'There aren\'t expected headers. Maybe current Docker Hub account doesn\'t have any limits. Metrics won\'t be returned')
         else:
-            logger.debug(f'Rate limits response returned with {status} status code. Can\'t fill metrics!')
+            logger.error(f'Empty headers returned')
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 1\n'
         return metrics_dict
 
