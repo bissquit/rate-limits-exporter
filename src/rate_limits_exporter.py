@@ -15,7 +15,7 @@ def parse_args():
     parser = argparse.ArgumentParser(prog='rate_limits_exporter',
                                      description='Docker Hub rate limits exporter for Prometheus')
     parser.add_argument('-d', '--directory',
-                        default=os.getenv('APP_SECRETS_DIR', '/opt/secrets'),
+                        default=os.getenv('APP_SECRETS_DIR', '/opt/secrets/'),
                         type=str,
                         help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
     parser.add_argument('-p', '--port',
@@ -160,15 +160,21 @@ def read_files_with_secrets(path):
     :return: dict with username : password pairs or empty dict if directory is empty
     """
     accounts_dict = {}
-    files_list = os.listdir(path=path)
-    for file_name in files_list:
-        full_file_path = f'{path}/{file_name}'
-        logger.info(f'Reading file {full_file_path}')
-        # read file data with trailing characters removed
-        file_data = open(full_file_path).read().rstrip()
-        accounts_dict[file_name] = file_data
+    try:
+        files_list = os.listdir(path=path)
+        if not files_list:
+            logger.info(f'Directory {path} is empty. Skipping reading files. DockerHub limits will be checked for external ip')
+        else:
+            for file_name in files_list:
+                full_file_path = f'{path}/{file_name}'
+                logger.info(f'Reading file {full_file_path}')
+                # read file data with trailing characters removed
+                file_data = open(full_file_path).read().rstrip()
+                accounts_dict[file_name] = file_data
+    except OSError as error:
+        logger.warning(f'Could not list files in directory {path}: {error}')
+
     if not accounts_dict:
-        logger.info(f'Directory {path} is empty. Skipping reading files. DockerHub limits will be checked for external ip')
         # we have not to return empty dict if dir is empty. The dict {'': ''} is not empty
         accounts_dict = {'': ''}
     return accounts_dict
