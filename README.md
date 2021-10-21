@@ -14,7 +14,7 @@ Don't forget to pass valid folder into container (read more at Help below):
 
 ```shell script
 docker run -it --rm \
-  -v /app/reta-limits:/opt/secrets \
+  -v /app/rate-limits:/opt/secrets \
   -e APP_SECRETS_DIR=/opt/secrets \
   -e APP_PORT=8080 \
   -e APP_LOOP_TIME=60 \
@@ -40,7 +40,7 @@ kubectl -n namespace_name apply -f k8s/deployment.yaml
 
 ## Help
 
-Exporter looks for the files in *directory*. Each file is a separate Docker Hub account where filename is a username of Docker Hub; file content is a password (trailing new line will be removed)
+Exporter looks for the files in *directory* and expects each file is a separate Docker Hub account where filename is a username of Docker Hub; file content is a password (trailing new line will be removed)
 
 You may pass options both via command line arguments or environment variables:
 

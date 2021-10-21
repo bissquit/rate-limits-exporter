@@ -17,13 +17,19 @@ spec:
           image: bissquit/rate-limits-exporter:latest
           env:
             - name: APP_SECRETS_DIR
-              value: "/opt/secrets"
+              # Secret will be mounted as symlink. You need to follow the symlink.
+              # If dir doesn't exist app will work anyway but with warning message
+              value: "/opt/secrets/..data/"
             - name: APP_PORT
               value: "8080"
             - name: APP_LOOP_TIME
               value: "60"
             - name: LOG_LEVEL
               value: "DEBUG"
+          volumeMounts:
+            - name: secret-volume
+              mountPath: /opt/secrets/
+              readOnly: true
           resources:
             requests:
               cpu: 20m
@@ -31,3 +37,13 @@ spec:
             limits:
               cpu: 40m
               memory: 256Mi
+      volumes:
+        - name: secret-volume
+          secret:
+            # Each item name is a username of Docker Hub. Item value - password
+            #
+            # To create a secret with two items from shell use command below:
+            # kubectl create secret generic test-secret \
+            #  --from-literal=username-1='password-1' \
+            #  --from-literal=username-2='password-2' \
+            secretName: test-secret
