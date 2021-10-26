@@ -49,7 +49,7 @@ You may pass options both via command line arguments or environment variables:
 |-h, --help|-|show help message|
 |-d, --directory|`APP_SECRETS_DIR`|Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt/secrets)|
 |-p, --port|`APP_PORT`|Port to be listened (default: 8080)|
-|-t, --time|`APP_LOOP_TIME`|Default time range in seconds to perform rate limits check (default: 60)|
+|-t, --time|`APP_CHECK_INTERVAL`|Default time range in seconds to perform rate limits check (default: 60)|
 |-|`LOG_LEVEL`|Log level based on Python [logging](https://docs.python.org/3/library/logging.html) module. expected values: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)|
 
 Metrics example:
