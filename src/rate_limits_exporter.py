@@ -23,7 +23,7 @@ def parse_args():
                         type=int,
                         help='Port to be listened (default: 8080)')
     parser.add_argument('-t', '--time',
-                        default=os.getenv("APP_LOOP_TIME", 60),
+                        default=os.getenv("APP_CHECK_INTERVAL", 60),
                         type=int,
                         help='Default time range in seconds to perform rate limits check (default: 60)')
     return parser.parse_args()
