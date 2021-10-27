@@ -26,6 +26,11 @@ def parse_args():
                         default=os.getenv("APP_CHECK_INTERVAL", 60),
                         type=int,
                         help='Default time range in seconds to perform rate limits check (default: 60)')
+    parser.add_argument('-s', '--source',
+                        default=os.getenv("APP_SOURCE_IP", False),
+                        type=bool,
+                        help='Put source ip address into labels set (default: False)'
+    )
     return parser.parse_args()
 
 
@@ -47,7 +52,10 @@ class Checker:
                 # while status code is 200 (not 401)
                 tokens_dict[username] = await self.get_token(username, password)
                 headers_dict = await self.get_rate_limit(token=tokens_dict[username], username=username)
-                metrics_dict = self.fill_metrics(username, headers_dict, metrics_dict)
+                metrics_dict = self.fill_metrics(username=username,
+                                                 headers_dict=headers_dict,
+                                                 metrics_dict=metrics_dict,
+                                                 put_source_ip_in_label=app['args'].source)
             # I don't know workaround yet but:
             # DeprecationWarning: Changing state of started or joined application is deprecated
             app['metrics_str'] = self.get_dict_return_str_of_values(metrics_dict)
@@ -117,17 +125,18 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
-    def configure_labels_set(self, username, headers_dict):
+    def configure_labels_set(self, username, headers_dict, put_source_ip_in_label):
         username_str = self.set_username(username)
-        if 'docker-ratelimit-source' in headers_dict:
+        if 'docker-ratelimit-source' in headers_dict and put_source_ip_in_label:
             sourceip_str = headers_dict['docker-ratelimit-source']
         else:
+            # label with empty value will be treated as no label
             sourceip_str = ''
         labels_str = f'dockerhub_user="{username_str}",source_ip="{sourceip_str}"'
         return labels_str
 
-    def fill_metrics(self, username, headers_dict, metrics_dict):
-        labels_str = self.configure_labels_set(username, headers_dict)
+    def fill_metrics(self, username, headers_dict, metrics_dict, put_source_ip_in_label):
+        labels_str = self.configure_labels_set(username, headers_dict, put_source_ip_in_label)
 
         if 'ratelimit-limit' in headers_dict and 'ratelimit-remaining' in headers_dict:
             logger.debug(f'Headers returned successfully. Configuring metrics...')
