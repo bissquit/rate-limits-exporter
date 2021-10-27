@@ -17,7 +17,7 @@ docker run -it --rm \
   -v /app/rate-limits:/opt/secrets \
   -e APP_SECRETS_DIR=/opt/secrets \
   -e APP_PORT=8080 \
-  -e APP_LOOP_TIME=60 \
+  -e APP_CHECK_INTERVAL=60 \
   -e LOG_LEVEL=DEBUG \
   bissquit/rate-limits-exporter:latest
 ```
