@@ -117,15 +117,26 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
+    def configure_labels_set(self, username, headers_dict):
+        username_str = self.set_username(username)
+        if 'docker-ratelimit-source' in headers_dict:
+            sourceip_str = headers_dict['docker-ratelimit-source']
+        else:
+            sourceip_str = ''
+        labels_str = f'dockerhub_user="{username_str}",source_ip="{sourceip_str}"'
+        return labels_str
+
     def fill_metrics(self, username, headers_dict, metrics_dict):
+        labels_str = self.configure_labels_set(username, headers_dict)
+
         if 'ratelimit-limit' in headers_dict and 'ratelimit-remaining' in headers_dict:
             logger.debug(f'Headers returned successfully. Configuring metrics...')
             # headers strings look like 100;w=21600. We need the first number
             ratelimit_limit = re.search('^\d*', headers_dict['ratelimit-limit']).group()
             ratelimit_remaining = re.search('^\d*', headers_dict['ratelimit-remaining']).group()
-            metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_limit}\n'
-            metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{dockerhub_user="{self.set_username(username)}"}} {ratelimit_remaining}\n'
-            metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 0\n'
+            metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{{labels_str}}} {ratelimit_limit}\n'
+            metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{{labels_str}}} {ratelimit_remaining}\n'
+            metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{{labels_str}}} 0\n'
         # not empty but without expected headers
         elif headers_dict:
             # request may not contain rate limits headers for some reasons
@@ -133,7 +144,7 @@ class Checker:
             logger.info(f'There aren\'t expected headers. Maybe current Docker Hub account doesn\'t have any limits. Metrics won\'t be returned')
         else:
             logger.error(f'Empty headers returned')
-            metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{dockerhub_user="{self.set_username(username)}"}} 1\n'
+            metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{{labels_str}}} 1\n'
         return metrics_dict
 
 
