@@ -1,0 +1,3 @@
+.idea/
+venv/
+src/rate_limits_exporter.egg-info
