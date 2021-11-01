@@ -29,15 +29,15 @@ def parse_args():
     parser.add_argument('-s', '--source',
                         default=os.getenv("APP_SOURCE_IP", False),
                         type=bool,
-                        help='Put source ip address into labels set (default: False)'
-    )
+                        help='Put source ip address into labels set (default: False)')
     return parser.parse_args()
 
 
 class Checker:
-    def __init__(self):
-        self.token_url = "https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull"
-        self.limits_url = "https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest"
+    def __init__(self, token_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull",
+                       limits_url="https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest"):
+        self.token_url = token_url
+        self.limits_url = limits_url
 
     async def entrypoint(self, app):
         tokens_dict = {}
