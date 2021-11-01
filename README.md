@@ -19,7 +19,7 @@ docker run -it --rm \
   -e APP_PORT=8080 \
   -e APP_CHECK_INTERVAL=60 \
   -e LOG_LEVEL=DEBUG \
-  -e APP_SOURCE_IP=False \
+  -e APP_PUT_SOURCE_IP=False \
   bissquit/rate-limits-exporter:latest
 ```
 
@@ -52,7 +52,7 @@ You may pass options both via command line arguments or environment variables:
 |-p, --port|`APP_PORT`|Port to be listened (default: 8080)|
 |-t, --time|`APP_CHECK_INTERVAL`|Default time range in seconds to perform rate limits check (default: 60)|
 |-|`LOG_LEVEL`|Log level based on Python [logging](https://docs.python.org/3/library/logging.html) module. expected values: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)|
-|-s, --source|`APP_SOURCE_IP`|Source ip address from headers will be inserted into labels. Be careful to use this option because many different ip addressess in the label set will produce a lot of new time series in Prometheus TSDB. Read **CAUTION** in official article [METRIC AND LABEL NAMING](https://prometheus.io/docs/practices/naming/)
+|-s, --source|`APP_PUT_SOURCE_IP`|Source ip address from headers will be inserted into labels. Be careful to use this option because many different ip addressess in the label set will produce a lot of new time series in Prometheus TSDB. Read **CAUTION** in official article [METRIC AND LABEL NAMING](https://prometheus.io/docs/practices/naming/)
 
 Metrics example:
 

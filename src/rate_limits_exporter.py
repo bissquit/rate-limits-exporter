@@ -27,7 +27,7 @@ def parse_args():
                         type=int,
                         help='Default time range in seconds to perform rate limits check (default: 60)')
     parser.add_argument('-s', '--source',
-                        default=os.getenv("APP_SOURCE_IP", False),
+                        default=os.getenv("APP_PUT_SOURCE_IP", False),
                         type=bool,
                         help='Put source ip address into labels set (default: False)')
     return parser.parse_args()
