@@ -73,13 +73,13 @@ class Checker:
             try:
                 async with client.get(self.token_url) as r:
                     status = r.status
-                    logger.info(f'Getting token for {self.set_username(username)} user')
+                    logger.info(f'Getting token for {self.get_username(username)} user')
                     logger.debug(f'Full response: {r}')
                     if status == 200:
                         json_body = await r.json()
                         token_str = json_body['token']
                     else:
-                        logger.error(f'Cannot renew token for {self.set_username(username)} user! Response status: {status}')
+                        logger.error(f'Cannot renew token for {self.get_username(username)} user! Response status: {status}')
             except aiohttp.ClientConnectionError as error:
                 logger.error(f'Connection error during updating token: {error}')
         return token_str
@@ -98,13 +98,13 @@ class Checker:
                     if status == 200:
                         headers_dict = r.headers
                     else:
-                        logger.error(f'Cannot get rate limits for {self.set_username(username)} user! Response status: {status}')
+                        logger.error(f'Cannot get rate limits for {self.get_username(username)} user! Response status: {status}')
             except aiohttp.ClientConnectionError as error:
                 logger.error(f'Connection error during getting rate limits: {error}')
         return headers_dict
 
     @staticmethod
-    def set_username(username):
+    def get_username(username):
         return username if username else "Anonymous"
 
     @staticmethod
@@ -126,7 +126,7 @@ class Checker:
         return metrics_dict
 
     def configure_labels_set(self, username, headers_dict, put_source_ip_in_label):
-        username_str = self.set_username(username)
+        username_str = self.get_username(username)
         if 'docker-ratelimit-source' in headers_dict and put_source_ip_in_label:
             sourceip_str = headers_dict['docker-ratelimit-source']
         else:
