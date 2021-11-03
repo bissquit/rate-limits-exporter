@@ -4,10 +4,11 @@ import io
 from rate_limits_exporter import Checker, read_files_with_secrets
 
 
-class MockTokenGetResponse:
-    def __init__(self, text, status):
+class MockTokenResponse:
+    def __init__(self, text, status, headers=None):
         self._text = text
         self.status = status
+        self.headers = headers
 
     async def __aexit__(self, exc_type, exc, tb):
         pass
@@ -20,18 +21,6 @@ class MockTokenGetResponse:
 
     async def json(self):
         return json.loads(self._text)
-
-
-class MockRateLimitsHeadResponse:
-    def __init__(self, headers, status):
-        self.status = status
-        self.headers = headers
-
-    async def __aexit__(self, exc_type, exc, tb):
-        pass
-
-    async def __aenter__(self):
-        return self
 
 
 # emulates incorrect directory path
@@ -51,17 +40,17 @@ async def test_get_token(mocker):
     json_data = {'token': 'some_data'}
     client = Checker()
 
-    resp = MockTokenGetResponse(json.dumps(json_data), 200)
+    resp = MockTokenResponse(json.dumps(json_data), 200)
     mocker.patch('aiohttp.ClientSession.get', return_value=resp)
     token = await client.get_token('', '')
     assert token == json_data['token']
 
-    resp = MockTokenGetResponse(json.dumps(json_data), 401)
+    resp = MockTokenResponse(json.dumps(json_data), 401)
     mocker.patch('aiohttp.ClientSession.get', return_value=resp)
     token = await client.get_token('', '')
     assert token == ''
 
-    resp = MockTokenGetResponse(json.dumps(json_data), 503)
+    resp = MockTokenResponse(json.dumps(json_data), 503)
     mocker.patch('aiohttp.ClientSession.get', return_value=resp)
     token = await client.get_token('', '')
     assert token == ''
@@ -75,12 +64,12 @@ async def test_get_rate_limits(mocker):
     }
     client = Checker()
 
-    resp = MockRateLimitsHeadResponse(headers_dict, 200)
+    resp = MockTokenResponse(headers_dict, 200, headers_dict)
     mocker.patch('aiohttp.ClientSession.head', return_value=resp)
     get_headers_dict = await client.get_rate_limit('token_str', '')
     assert headers_dict == get_headers_dict
 
-    resp = MockRateLimitsHeadResponse(headers_dict, 503)
+    resp = MockTokenResponse(headers_dict, 503, headers_dict)
     mocker.patch('aiohttp.ClientSession.head', return_value=resp)
     get_headers_dict = await client.get_rate_limit('token_str', '')
     assert get_headers_dict == {}
