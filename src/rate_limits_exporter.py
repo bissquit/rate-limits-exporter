@@ -33,33 +33,19 @@ def parse_args():
     return parser.parse_args()
 
 
-class Checker:
+class DockerHubClient:
     def __init__(self, token_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull",
                        limits_url="https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest"):
         self.token_url = token_url
         self.limits_url = limits_url
 
-    async def entrypoint(self, app):
-        tokens_dict = {}
-        # fill accounts with empty tokens (they will be renewed in further)
-        for account in app['accounts_dict']:
-            tokens_dict = {account: ''}
-        while True:
-            metrics_dict = self.fill_metrics_help({})
-            for username, password in app['accounts_dict'].items():
-                # we have to renew token before each request because for some reasons Docker Hub
-                # doesn't return required headers several minutes before token expiration
-                # while status code is 200 (not 401)
-                tokens_dict[username] = await self.get_token(username, password)
-                headers_dict = await self.get_rate_limit(token=tokens_dict[username], username=username)
-                metrics_dict = self.fill_metrics(username=username,
-                                                 headers_dict=headers_dict,
-                                                 metrics_dict=metrics_dict,
-                                                 put_source_ip_in_label=app['args'].source)
-            # I don't know workaround yet but:
-            # DeprecationWarning: Changing state of started or joined application is deprecated
-            app['metrics_str'] = self.get_dict_return_str_of_values(metrics_dict)
-            await asyncio.sleep(app['args'].time)
+    async def client_handler(self, username, password):
+        # we have to renew token before each request because for some reasons Docker Hub
+        # doesn't return required headers several minutes before token expiration
+        # while status code is 200 (not 401)
+        token_str = await self.get_token(username=username, password=password)
+        headers_dict = await self.get_rate_limit(username=username, token=token_str)
+        return headers_dict
 
     async def get_token(self, username, password):
         token_str = ''
@@ -73,18 +59,18 @@ class Checker:
             try:
                 async with client.get(self.token_url) as r:
                     status = r.status
-                    logger.info(f'Getting token for {self.get_username(username)} user')
+                    logger.info(f'Getting token for {get_username(username)} user')
                     logger.debug(f'Full response: {r}')
                     if status == 200:
                         json_body = await r.json()
                         token_str = json_body['token']
                     else:
-                        logger.error(f'Cannot renew token for {self.get_username(username)} user! Response status: {status}')
+                        logger.error(f'Cannot renew token for {get_username(username)} user! Response status: {status}')
             except aiohttp.ClientConnectionError as error:
                 logger.error(f'Connection error during updating token: {error}')
         return token_str
 
-    async def get_rate_limit(self, token, username):
+    async def get_rate_limit(self, username, token):
         headers_dict = {}
         headers = {'Authorization': f'Bearer {token}'}
         async with aiohttp.ClientSession(headers=headers) as client:
@@ -98,14 +84,27 @@ class Checker:
                     if status == 200:
                         headers_dict = r.headers
                     else:
-                        logger.error(f'Cannot get rate limits for {self.get_username(username)} user! Response status: {status}')
+                        logger.error(f'Cannot get rate limits for {get_username(username)} user! Response status: {status}')
             except aiohttp.ClientConnectionError as error:
                 logger.error(f'Connection error during getting rate limits: {error}')
         return headers_dict
 
-    @staticmethod
-    def get_username(username):
-        return username if username else "Anonymous"
+
+class Metrics:
+    def __init__(self):
+        pass
+
+    async def handler(self, accounts_dict, put_source_ip_in_label=False):
+        metrics_dict = self.fill_metrics_help({})
+        # getting headers for each account and produce metrics
+        for username, password in accounts_dict.items():
+            headers_dict = await DockerHubClient().client_handler(username=username, password=password)
+            metrics_dict = self.fill_metrics(username=username,
+                                             headers_dict=headers_dict,
+                                             metrics_dict=metrics_dict,
+                                             put_source_ip_in_label=put_source_ip_in_label)
+        metrics_str = self.get_dict_return_str_of_values(metrics_dict=metrics_dict)
+        return metrics_str
 
     @staticmethod
     def get_dict_return_str_of_values(metrics_dict):
@@ -116,6 +115,17 @@ class Checker:
         return metrics_str
 
     @staticmethod
+    def configure_labels_set(username, headers_dict, put_source_ip_in_label):
+        username_str = get_username(username)
+        if 'docker-ratelimit-source' in headers_dict and put_source_ip_in_label:
+            source_ip_str = headers_dict['docker-ratelimit-source']
+        else:
+            # label with empty value will be treated as no label
+            source_ip_str = ''
+        labels_str = f'dockerhub_user="{username_str}",source_ip="{source_ip_str}"'
+        return labels_str
+
+    @staticmethod
     def fill_metrics_help(metrics_dict):
         metrics_dict['dockerhub_ratelimit_current'] = f'# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
         metrics_dict['dockerhub_ratelimit_current'] += f'# TYPE dockerhub_ratelimit_current gauge\n'
@@ -124,16 +134,6 @@ class Checker:
         metrics_dict['dockerhub_ratelimit_scrape_error'] = f'# HELP dockerhub_ratelimit_scrape_error Scrape errors (wrong status code or something else)\n'
         metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
-
-    def configure_labels_set(self, username, headers_dict, put_source_ip_in_label):
-        username_str = self.get_username(username)
-        if 'docker-ratelimit-source' in headers_dict and put_source_ip_in_label:
-            sourceip_str = headers_dict['docker-ratelimit-source']
-        else:
-            # label with empty value will be treated as no label
-            sourceip_str = ''
-        labels_str = f'dockerhub_user="{username_str}",source_ip="{sourceip_str}"'
-        return labels_str
 
     def fill_metrics(self, username, headers_dict, metrics_dict, put_source_ip_in_label):
         labels_str = self.configure_labels_set(username, headers_dict, put_source_ip_in_label)
@@ -157,6 +157,10 @@ class Checker:
         return metrics_dict
 
 
+def get_username(username):
+    return username if username else "Anonymous"
+
+
 # https://docs.aiohttp.org/en/stable/web_quickstart.html#handler
 # A request handler must be a coroutine that accepts
 # a Request instance as its only parameter...
@@ -166,12 +170,21 @@ async def metrics_handler(request):
 
 
 async def start_background_tasks(app):
-    app['rate_limits_checker'] = asyncio.create_task(Checker().entrypoint(app))
+    app['rate_limits_checker'] = asyncio.create_task(background_task(app))
 
 
 async def cleanup_background_tasks(app):
     app['rate_limits_checker'].cancel()
     await app['rate_limits_checker']
+
+
+async def background_task(app):
+    accounts_dict = app['accounts_dict']
+    while True:
+        metrics_str = await Metrics().handler(accounts_dict=accounts_dict,
+                                              put_source_ip_in_label=app['args'].source)
+        app['metrics_str'] = metrics_str
+        await asyncio.sleep(app['args'].time)
 
 
 def read_files_with_secrets(path):

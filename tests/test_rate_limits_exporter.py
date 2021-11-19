@@ -1,7 +1,7 @@
 import pytest
 import json
 import io
-from rate_limits_exporter import Checker, read_files_with_secrets
+from rate_limits_exporter import Metrics, get_username, read_files_with_secrets, DockerHubClient
 
 
 class MockTokenResponse:
@@ -38,7 +38,7 @@ class MockOSListDir:
 @pytest.mark.asyncio
 async def test_get_token(mocker):
     json_data = {'token': 'some_data'}
-    client = Checker()
+    client = DockerHubClient()
 
     resp = MockTokenResponse(json.dumps(json_data), 200)
     mocker.patch('aiohttp.ClientSession.get', return_value=resp)
@@ -62,7 +62,7 @@ async def test_get_rate_limits(mocker):
         'ratelimit-limit':      '100;w=21600',
         'ratelimit-remaining':  '100;w=21600'
     }
-    client = Checker()
+    client = DockerHubClient()
 
     resp = MockTokenResponse(headers_dict, 200, headers_dict)
     mocker.patch('aiohttp.ClientSession.head', return_value=resp)
@@ -75,11 +75,35 @@ async def test_get_rate_limits(mocker):
     assert get_headers_dict == {}
 
 
+async def mock_awaitable_obj(mocked_dict):
+    return mocked_dict
+
+
+@pytest.mark.asyncio
+async def test_client_handler(mocker):
+    client = DockerHubClient()
+
+    get_token_resp = mock_awaitable_obj('')
+    mocker.patch('rate_limits_exporter.DockerHubClient.get_token', return_value=get_token_resp)
+    get_rate_limit_resp = mock_awaitable_obj({})
+    mocker.patch('rate_limits_exporter.DockerHubClient.get_rate_limit', return_value=get_rate_limit_resp)
+    result = await client.client_handler('', '')
+    assert result == {}
+
+    not_empty_str = 'not_empty_str'
+    get_token_resp = mock_awaitable_obj(not_empty_str)
+    mocker.patch('rate_limits_exporter.DockerHubClient.get_token', return_value=get_token_resp)
+    get_rate_limit_resp = mock_awaitable_obj({})
+    mocker.patch('rate_limits_exporter.DockerHubClient.get_rate_limit', return_value=get_rate_limit_resp)
+    result = await client.client_handler('', '')
+    assert result == {}
+
+
 def test_get_username():
-    username = Checker().get_username('')
+    username = get_username('')
     assert username == 'Anonymous'
 
-    username = Checker().get_username('User-1')
+    username = get_username('User-1')
     assert username == 'User-1'
 
 
@@ -88,11 +112,11 @@ def test_get_dict_return_str_of_values():
         'key-1': 'key-1-value-1\nkey-1-value-2\n',
         'key-2': 'key-2-value-1\nkey-2-value-2\n'
     }
-    metrics_str = Checker().get_dict_return_str_of_values(metrics_dict)
+    metrics_str = Metrics().get_dict_return_str_of_values(metrics_dict)
     assert metrics_str == 'key-1-value-1\nkey-1-value-2\nkey-2-value-1\nkey-2-value-2\n'
 
     metrics_dict = {'': ''}
-    metrics_str = Checker().get_dict_return_str_of_values(metrics_dict)
+    metrics_str = Metrics().get_dict_return_str_of_values(metrics_dict)
     assert metrics_str == ''
 
 
@@ -102,9 +126,9 @@ def test_fill_metrics_help():
         'ratelimit-remaining':  '100;w=21600'
     }
     # we should create two separate objects (variable in Python is obj too)
-    metrics_help_dict = Checker().fill_metrics_help({})
-    metrics_values_dict = Checker().fill_metrics_help({})
-    metrics_values_dict = Checker().fill_metrics(username='',
+    metrics_help_dict = Metrics().fill_metrics_help({})
+    metrics_values_dict = Metrics().fill_metrics_help({})
+    metrics_values_dict = Metrics().fill_metrics(username='',
                                                  headers_dict=headers_dict,
                                                  metrics_dict=metrics_values_dict,
                                                  put_source_ip_in_label=False)
@@ -122,16 +146,16 @@ def test_configure_labels_set():
     headers_dict = {
         'docker-ratelimit-source':  '1.2.3.4'
     }
-    labels_str = Checker().configure_labels_set(username='', headers_dict=headers_dict, put_source_ip_in_label=True)
+    labels_str = Metrics().configure_labels_set(username='', headers_dict=headers_dict, put_source_ip_in_label=True)
     assert labels_str == 'dockerhub_user="Anonymous",source_ip="1.2.3.4"'
 
-    labels_str = Checker().configure_labels_set(username='', headers_dict={}, put_source_ip_in_label=True)
+    labels_str = Metrics().configure_labels_set(username='', headers_dict={}, put_source_ip_in_label=True)
     assert labels_str == 'dockerhub_user="Anonymous",source_ip=""'
 
-    labels_str = Checker().configure_labels_set(username='User-1', headers_dict=headers_dict, put_source_ip_in_label=True)
+    labels_str = Metrics().configure_labels_set(username='User-1', headers_dict=headers_dict, put_source_ip_in_label=True)
     assert labels_str == 'dockerhub_user="User-1",source_ip="1.2.3.4"'
 
-    labels_str = Checker().configure_labels_set(username='User-1', headers_dict={}, put_source_ip_in_label=True)
+    labels_str = Metrics().configure_labels_set(username='User-1', headers_dict={}, put_source_ip_in_label=True)
     assert labels_str == 'dockerhub_user="User-1",source_ip=""'
 
 
@@ -142,8 +166,8 @@ def test_fill_metrics():
         'ratelimit-remaining': '100;w=21600',
         'docker-ratelimit-source':  '1.2.3.4'
     }
-    metrics_dict = Checker().fill_metrics_help({})
-    metrics_dict = Checker().fill_metrics(username='',
+    metrics_dict = Metrics().fill_metrics_help({})
+    metrics_dict = Metrics().fill_metrics(username='',
                                           headers_dict=headers_dict,
                                           metrics_dict=metrics_dict,
                                           put_source_ip_in_label=True)
@@ -153,8 +177,8 @@ def test_fill_metrics():
         'ratelimit-remaining': '100;w=21600',
         'docker-ratelimit-source':  '1.2.3.4'
     }
-    metrics_dict = Checker().fill_metrics_help({})
-    metrics_dict = Checker().fill_metrics(username='',
+    metrics_dict = Metrics().fill_metrics_help({})
+    metrics_dict = Metrics().fill_metrics(username='',
                                           headers_dict=headers_dict,
                                           metrics_dict=metrics_dict,
                                           put_source_ip_in_label=True)
@@ -164,8 +188,8 @@ def test_fill_metrics():
         'ratelimit-limit': '100;w=21600',
         'docker-ratelimit-source':  '1.2.3.4'
     }
-    metrics_dict = Checker().fill_metrics_help({})
-    metrics_dict = Checker().fill_metrics(username='',
+    metrics_dict = Metrics().fill_metrics_help({})
+    metrics_dict = Metrics().fill_metrics(username='',
                                           headers_dict=headers_dict,
                                           metrics_dict=metrics_dict,
                                           put_source_ip_in_label=True)
@@ -175,8 +199,8 @@ def test_fill_metrics():
         'ratelimit-limit': '100;w=21600',
         'ratelimit-remaining': '100;w=21600',
     }
-    metrics_dict = Checker().fill_metrics_help({})
-    metrics_dict = Checker().fill_metrics(username='',
+    metrics_dict = Metrics().fill_metrics_help({})
+    metrics_dict = Metrics().fill_metrics(username='',
                                           headers_dict=headers_dict,
                                           metrics_dict=metrics_dict,
                                           put_source_ip_in_label=True)

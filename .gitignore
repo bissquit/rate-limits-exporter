@@ -2,4 +2,5 @@
 venv/
 rate_limits_exporter.egg-info/
 src/__pycache__/
+tests/__pycache__/
 tmp*
