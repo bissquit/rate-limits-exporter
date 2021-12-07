@@ -6,5 +6,7 @@ setup(
     package_dir={"": "src"},
     install_requires=['pytest',
                       'pytest-mock',
-                      'pytest-asyncio']
+                      'pytest-asyncio',
+                      'flake8',
+                      'coveralls']
 )
