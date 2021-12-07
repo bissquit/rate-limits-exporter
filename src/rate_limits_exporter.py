@@ -35,7 +35,7 @@ def parse_args():
 
 class DockerHubClient:
     def __init__(self, token_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull",
-                       limits_url="https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest"):
+                 limits_url="https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest"):
         self.token_url = token_url
         self.limits_url = limits_url
 
@@ -127,22 +127,22 @@ class Metrics:
 
     @staticmethod
     def fill_metrics_help(metrics_dict):
-        metrics_dict['dockerhub_ratelimit_current'] = f'# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
-        metrics_dict['dockerhub_ratelimit_current'] += f'# TYPE dockerhub_ratelimit_current gauge\n'
-        metrics_dict['dockerhub_ratelimit_remaining'] = f'# HELP dockerhub_ratelimit_remaining Remaining limit for DockerHub account (or for ip address if anonymous access)\n'
-        metrics_dict['dockerhub_ratelimit_remaining'] += f'# TYPE dockerhub_ratelimit_remaining gauge\n'
-        metrics_dict['dockerhub_ratelimit_scrape_error'] = f'# HELP dockerhub_ratelimit_scrape_error Scrape errors (wrong status code or something else)\n'
-        metrics_dict['dockerhub_ratelimit_scrape_error'] += f'# TYPE dockerhub_ratelimit_scrape_error gauge\n'
+        metrics_dict['dockerhub_ratelimit_current'] = '# HELP dockerhub_ratelimit_current Current max limit for DockerHub account (or for ip address if anonymous access)\n'
+        metrics_dict['dockerhub_ratelimit_current'] += '# TYPE dockerhub_ratelimit_current gauge\n'
+        metrics_dict['dockerhub_ratelimit_remaining'] = '# HELP dockerhub_ratelimit_remaining Remaining limit for DockerHub account (or for ip address if anonymous access)\n'
+        metrics_dict['dockerhub_ratelimit_remaining'] += '# TYPE dockerhub_ratelimit_remaining gauge\n'
+        metrics_dict['dockerhub_ratelimit_scrape_error'] = '# HELP dockerhub_ratelimit_scrape_error Scrape errors (wrong status code or something else)\n'
+        metrics_dict['dockerhub_ratelimit_scrape_error'] += '# TYPE dockerhub_ratelimit_scrape_error gauge\n'
         return metrics_dict
 
     def fill_metrics(self, username, headers_dict, metrics_dict, put_source_ip_in_label):
         labels_str = self.configure_labels_set(username, headers_dict, put_source_ip_in_label)
 
         if 'ratelimit-limit' in headers_dict and 'ratelimit-remaining' in headers_dict:
-            logger.debug(f'Headers returned successfully. Configuring metrics...')
+            logger.debug('Headers returned successfully. Configuring metrics...')
             # headers strings look like 100;w=21600. We need the first number
-            ratelimit_limit = re.search('^\d*', headers_dict['ratelimit-limit']).group()
-            ratelimit_remaining = re.search('^\d*', headers_dict['ratelimit-remaining']).group()
+            ratelimit_limit = re.search(r'^\d*', headers_dict['ratelimit-limit']).group()
+            ratelimit_remaining = re.search(r'^\d*', headers_dict['ratelimit-remaining']).group()
             metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{{labels_str}}} {ratelimit_limit}\n'
             metrics_dict['dockerhub_ratelimit_remaining'] += f'dockerhub_ratelimit_remaining{{{labels_str}}} {ratelimit_remaining}\n'
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{{labels_str}}} 0\n'
@@ -150,9 +150,9 @@ class Metrics:
         elif headers_dict:
             # request may not contain rate limits headers for some reasons
             # even with 200 status code so we have to check it
-            logger.info(f'There aren\'t expected headers. Maybe current Docker Hub account doesn\'t have any limits. Metrics won\'t be returned')
+            logger.info('There aren\'t expected headers. Maybe current Docker Hub account doesn\'t have any limits. Metrics won\'t be returned')
         else:
-            logger.error(f'Empty headers returned')
+            logger.error('Empty headers returned')
             metrics_dict['dockerhub_ratelimit_scrape_error'] += f'dockerhub_ratelimit_scrape_error{{{labels_str}}} 1\n'
         return metrics_dict
 
