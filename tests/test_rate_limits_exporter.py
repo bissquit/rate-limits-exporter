@@ -83,17 +83,17 @@ async def mock_awaitable_obj(mocked_dict):
 async def test_client_handler(mocker):
     client = DockerHubClient()
 
-    get_token_resp = mock_awaitable_obj('')
+    get_token_resp = await mock_awaitable_obj('')
     mocker.patch('rate_limits_exporter.DockerHubClient.get_token', return_value=get_token_resp)
-    get_rate_limit_resp = mock_awaitable_obj({})
+    get_rate_limit_resp = await mock_awaitable_obj({})
     mocker.patch('rate_limits_exporter.DockerHubClient.get_rate_limit', return_value=get_rate_limit_resp)
     result = await client.client_handler('', '')
     assert result == {}
 
     not_empty_str = 'not_empty_str'
-    get_token_resp = mock_awaitable_obj(not_empty_str)
+    get_token_resp = await mock_awaitable_obj(not_empty_str)
     mocker.patch('rate_limits_exporter.DockerHubClient.get_token', return_value=get_token_resp)
-    get_rate_limit_resp = mock_awaitable_obj({})
+    get_rate_limit_resp = await mock_awaitable_obj({})
     mocker.patch('rate_limits_exporter.DockerHubClient.get_rate_limit', return_value=get_rate_limit_resp)
     result = await client.client_handler('', '')
     assert result == {}
