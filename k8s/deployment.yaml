@@ -26,6 +26,9 @@ spec:
               value: "60"
             - name: LOG_LEVEL
               value: "DEBUG"
+            #
+            - name: APP_PUT_SOURCE_IP
+              value: "False"
           volumeMounts:
             - name: secret-volume
               mountPath: /opt/secrets/
