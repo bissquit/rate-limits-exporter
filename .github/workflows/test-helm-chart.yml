@@ -55,7 +55,7 @@ jobs:
           sudo mv kind /usr/local/bin/
 
           echo '--- Create Kind cluster ---'
-          sudo kind create cluster --image kindest/node:${KUBERNETES_CLUSTER_VERSION}
+          kind create cluster --image kindest/node:${KUBERNETES_CLUSTER_VERSION}
 
       - name: 'Run Helm lint'
         run: |
@@ -79,7 +79,7 @@ jobs:
             --install \
             --namespace ${NAMESPACE} \
             --create-namespace \
-            --values values-custom.yaml \
+            --values rate-limits-exporter/values-custom.yaml \
             --wait \
             rate-limits-exporter \
             ./rate-limits-exporter
