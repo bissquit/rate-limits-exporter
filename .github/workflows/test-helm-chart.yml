@@ -67,7 +67,7 @@ jobs:
             | kube-score score \
                 --ignore-test pod-networkpolicy - || true
 
-      - name: 'Deploy chart to Kubernetes cluster'
+      - name: 'Run Helm tests'
         run: |
           helm upgrade \
             --install \
@@ -78,7 +78,5 @@ jobs:
             rate-limits-exporter \
             ./rate-limits-exporter
 
-      - name: 'Run Helm tests'
-        run: |
           helm --namespace ${NAMESPACE} \
             test rate-limits-exporter
