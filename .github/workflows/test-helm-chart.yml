@@ -21,6 +21,8 @@ jobs:
 
       - name: 'Install prerequisites'
         run: |
+          sudo -i
+          
           apt-get update
           apt-get install -yq --no-install-recommends \
             wget
