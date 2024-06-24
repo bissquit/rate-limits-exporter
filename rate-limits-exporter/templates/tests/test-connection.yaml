@@ -6,7 +6,7 @@ metadata:
     {{- include "rate-limits-exporter.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test
-    kube-score/ignore: container-ephemeral-storage-request-and-limit,pod-probes,container-resources,container-security-context-user-group-id,container-image-pull-policy
+    "kube-score/ignore": container-ephemeral-storage-request-and-limit,pod-probes,container-resources,container-security-context-user-group-id,container-image-pull-policy
 spec:
   securityContext:
     runAsUser: 1000
