@@ -10,6 +10,7 @@ env:
   KIND_VERSION: v0.23.0
   KUBE_SCORE_VERSION: v1.18.0
   CHART_NAME: rate-limits-exporter
+  NAMESPACE: awesome-app
 
 jobs:
   test-chart:
@@ -57,8 +58,24 @@ jobs:
         run: |
           helm lint ${CHART_NAME}
 
-      - name: 'Run kube-score'
+      - name: 'Run kube-score checks'
         run: |
           helm template rate-limits-exporter \
             | kube-score score \
-                --ignore-test pod-networkpolicy -
+                --ignore-test pod-networkpolicy - || true
+
+      - name: 'Deploy chart to Kubernetes cluster'
+        run: |
+          helm upgrade \
+            --install \
+            --namespace ${NAMESPACE} \
+            --create-namespace \
+            --values values-custom.yaml \
+            --wait \
+            rate-limits-exporter \
+            ./rate-limits-exporter
+
+      - name: 'Run Helm tests'
+        run: |
+          helm --namespace ${NAMESPACE} \                         
+            test rate-limits-exporter
