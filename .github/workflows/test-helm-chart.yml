@@ -9,7 +9,7 @@ env:
   KUBERNETES_CLUSTER_VERSION: v1.28.9
   KIND_VERSION: v0.23.0
   KUBE_SCORE_VERSION: v1.18.0
-  CHART_NAME: rate-limit-exporter
+  CHART_NAME: rate-limits-exporter
 
 jobs:
   test-chart:
