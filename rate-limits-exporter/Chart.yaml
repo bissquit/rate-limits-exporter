@@ -23,4 +23,5 @@ version: 0.1.0
 # It is recommended to use it with quotes.
 appVersion: "1.16.0"
 
+# dummy icon
 icon: https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png
