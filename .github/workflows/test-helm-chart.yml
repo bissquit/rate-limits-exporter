@@ -67,12 +67,6 @@ jobs:
             | kube-score score \
                 --ignore-test pod-networkpolicy - || true
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        with:
-#          sudo: false
-          limit-access-to-actor: false
-
       - name: 'Deploy chart to Kubernetes cluster'
         run: |
           helm upgrade \
@@ -86,5 +80,5 @@ jobs:
 
       - name: 'Run Helm tests'
         run: |
-          helm --namespace ${NAMESPACE} \                         
+          helm --namespace ${NAMESPACE} \
             test rate-limits-exporter
