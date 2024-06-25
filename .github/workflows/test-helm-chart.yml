@@ -60,7 +60,7 @@ jobs:
         run: |
           helm template rate-limits-exporter \
             | kube-score score \
-                --ignore-test pod-networkpolicy - || true
+                --ignore-test pod-networkpolicy -
 
       - name: 'Run Helm tests'
         run: |
