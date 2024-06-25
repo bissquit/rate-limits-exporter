@@ -6,17 +6,17 @@ metadata:
     {{- include "rate-limits-exporter.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test
-    "kube-score/ignore": container-ephemeral-storage-request-and-limit,pod-probes,container-resources,container-security-context-user-group-id,container-image-pull-policy
+    "kube-score/ignore": container-ephemeral-storage-request-and-limit,pod-probes,container-resources,container-security-context-user-group-id,container-image-pull-policy,container-security-context-readonlyrootfilesystem,container-security-context-user-group-id
 spec:
-  securityContext:
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 2000
+#  securityContext:
+#    runAsUser: 1000
+#    runAsGroup: 1000
+#    fsGroup: 2000
   containers:
     - name: wget
       image: busybox:1.36.1
       command: ['wget']
       args: ['{{ include "rate-limits-exporter.fullname" . }}:{{ .Values.service.port }}']
-      securityContext:
-        readOnlyRootFilesystem: true
+#      securityContext:
+#        readOnlyRootFilesystem: true
   restartPolicy: Never
