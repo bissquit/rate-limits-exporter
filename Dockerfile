@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-LABEL com.bissquit.rate-limit-exporter.description="Docker Hub rate limits exporter for Prometheus" \
+LABEL com.bissquit.rate-limit-exporter.description="DockerHub rate limits exporter for Prometheus" \
       com.bissquit.rate-limit-exporter.author="Egor Vasilyev" \
       com.bissquit.rate-limit-exporter.source="https://github.com/bissquit/rate-limits-exporter"
 

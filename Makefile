@@ -1,5 +1,5 @@
 env:
-	mkdir venv || true
+	mkdir -p venv
 	python3 -m venv venv
 	pip3 install tox
 
