@@ -25,7 +25,11 @@ jobs:
         run: |
           printenv
 
-      - name: 'Install and Configure applications'
+      - name: 'Test environment'
+        run: |
+          [[ "${{ env.DOCKER_IMAGE_NAME }}" == "" ]] && { echo 'Variable DOCKER_IMAGE_NAME is not set, exit...' ; exit 1 ; } || exit 0
+
+      - name: 'Install prerequisites'
         run: |
           apt-get update
           apt-get install -yqq --no-install-recommends \
