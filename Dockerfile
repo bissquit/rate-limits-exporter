@@ -1,7 +1,8 @@
 FROM python:3.9-slim
 
-LABEL description="Docker Hub rate limits exporter for Prometheus" \
-      source="https://github.com/bissquit/rate-limits-exporter"
+LABEL com.bissquit.rate-limit-exporter.description="DockerHub rate limits exporter for Prometheus" \
+      com.bissquit.rate-limit-exporter.author="Egor Vasilyev" \
+      com.bissquit.rate-limit-exporter.source="https://github.com/bissquit/rate-limits-exporter"
 
 # nobody user in base image
 ARG UID=65534
@@ -12,10 +13,10 @@ COPY --chown=$UID:$UID rate_limits_exporter.py \
 
 WORKDIR /opt
 
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --upgrade -r requirements.txt && \
-    mkdir /opt/secrets \
-    chown $UID:$UID /opt/secrets
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir --upgrade -r requirements.txt \
+    && mkdir -p /opt/secrets \
+    && chown $UID:$UID /opt/secrets
 
 EXPOSE 8080
 

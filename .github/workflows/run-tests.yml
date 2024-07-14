@@ -1,0 +1,54 @@
+name: 'Run tests'
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!main'
+
+jobs:
+  run-tests:
+    name: 'Run tests'
+    runs-on: ubuntu-22.04
+    container: python:3.9-slim
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: 'Debug'
+        run: |
+          printenv
+
+      - name: 'Install prerequisites'
+        run: |
+          apt-get update
+          apt-get install -yqq --no-install-recommends \
+            make \
+            python3-venv
+
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: 'Configure environment'
+        run: |
+          make env
+
+      - name: 'Run tests'
+        run: |
+          make test
+
+      - name: 'Upload artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: htmlcov
+          path: ./htmlcov
+          retention-days: 10
+
+  build-image:
+    name: 'Build Docker image'
+    needs: run-tests
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit

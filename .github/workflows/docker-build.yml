@@ -1,0 +1,66 @@
+name: 'Build and publish image'
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_call:
+
+env:
+  # set proper image name for your environment
+  # https://docs.github.com/en/actions/learn-github-actions/variables#creating-configuration-variables-for-a-repository
+  DOCKER_IMAGE_NAME: ${{ vars.DOCKER_IMAGE_NAME }}
+
+jobs:
+  release:
+    name: 'Build image'
+    runs-on: ubuntu-22.04
+    container: cruizba/ubuntu-dind:focal-25.0.3
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: 'Debug'
+        run: |
+          printenv
+
+      - name: 'Test environment'
+        run: |
+          [[ "${{ env.DOCKER_IMAGE_NAME }}" == "" ]] && { echo 'Variable DOCKER_IMAGE_NAME is not set, exit...' ; exit 1 ; } || exit 0
+
+      - name: 'Install prerequisites'
+        run: |
+          apt-get update
+          apt-get install -yqq --no-install-recommends \
+            ca-certificates \
+            git-core
+
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: 'Log in to Docker Hub'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 'Extract metadata (tags, labels) for Docker'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{raw}}
+
+      - name: 'Build and push Docker image'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
