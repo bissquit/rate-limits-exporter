@@ -19,25 +19,22 @@ jobs:
         run: |
           printenv
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: false
-          limit-access-to-actor: false
-
       - name: 'Install prerequisites'
         run: |
           apt-get update
           apt-get install -yqq --no-install-recommends \
             make \
             python3-venv
-          make env
 
       - name: 'Checkout repository'
         uses: actions/checkout@v4
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      - name: 'Configure environment'
+        run: |
+          make env
 
       - name: 'Run tests'
         run: |
