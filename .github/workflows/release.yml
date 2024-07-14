@@ -14,7 +14,10 @@ jobs:
     runs-on: ubuntu-22.04
     container: node:20-bullseye
     env:
-      GITHUB_TOKEN: ${{ github.token }}
+      # we should make a release on behalf of real user
+      # otherwise that pipeline won't trigger another (docker-build.yml)
+      # and docker image won't be built and published
+      GITHUB_TOKEN: ${{ secrets.PAT }}
     defaults:
       run:
         shell: bash
