@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - v*
+  workflow_call:
+
 env:
   # set proper image name for your environment
   # https://docs.github.com/en/actions/learn-github-actions/variables#creating-configuration-variables-for-a-repository
