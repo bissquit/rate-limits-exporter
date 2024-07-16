@@ -161,6 +161,28 @@ def get_username(username):
     return username if username else "Anonymous"
 
 
+async def root_handler(request):
+    return web.Response(
+        text='''
+            <!DOCTYPE HTML>
+            <html>
+             <head>
+              <meta charset="utf-8">
+             </head>
+             <body>
+              <p><a href="metrics">metrics</a></p>
+              <p><a href="healthz">healthz</a></p>
+             </body>
+            </html>
+        ''',
+        content_type='text/html'
+    )
+
+
+async def healthz_handler(request):
+    return web.Response(text='Ok')
+
+
 # https://docs.aiohttp.org/en/stable/web_quickstart.html#handler
 # A request handler must be a coroutine that accepts
 # a Request instance as its only parameter...
@@ -220,7 +242,11 @@ def main():
     app['accounts_dict'] = read_files_with_secrets(args.directory)  # {'username1': 'password1', {username2}: ...}
     app['metrics_str'] = 'Initialization'
     app['args'] = args
-    app.add_routes([web.get('/metrics', metrics_handler)])
+    app.add_routes([
+        web.get('/', root_handler),
+        web.get('/healthz', healthz_handler),
+        web.get('/metrics', metrics_handler)
+    ])
     # https://docs.aiohttp.org/en/stable/web_advanced.html#background-tasks
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
