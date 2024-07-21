@@ -1,6 +1,5 @@
 import pytest
 import json
-import io
 from rate_limits_exporter import Metrics, get_username, handle_credentials, DockerHubClient
 
 
@@ -208,19 +207,19 @@ def test_fill_metrics():
 
 
 def test_handle_credentials():
-    accounts_dict = handle_credentials('', '')
-    assert accounts_dict == {'', ''}
+    account_dict = handle_credentials('', '')
+    assert account_dict == {'': ''}
 
-    accounts_dict = handle_credentials('name', 'pass_of_some_account')
-    assert accounts_dict == {'', ''}
+    account_dict = handle_credentials('name', 'pass_of_some_account')
+    assert account_dict == {'name': 'pass_of_some_account'}
 
     try:
-        accounts_dict = handle_credentials('name', '')
-    except Exception:
+        account_dict = handle_credentials('name', '')
+    except BaseException:
         print(Exception)
         assert True
 
     try:
-        accounts_dict = handle_credentials('', 'pass_of_some_account')
-    except Exception:
+        account_dict = handle_credentials('', 'pass_of_some_account')
+    except BaseException:
         assert True

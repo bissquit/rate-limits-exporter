@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import aiohttp
 from aiohttp import web
 import asyncio
@@ -216,14 +217,16 @@ async def background_task(app):
 def handle_credentials(username: str, password: str):
     if username and not password:
         logger.error(f'Password for {username} account is not set!')
+        sys.exit()
     elif not username and password:
-        logger.error(f'Password is not empty while username is not set!')
+        logger.error('Password is not empty while username is not set!')
+        sys.exit()
     elif not username and not password:
-        logger.info(f'Username and password are not set, DockerHub limits will be checked for external ip (Anonymous user)')
-        accounts_dict = {'': ''}
+        logger.info('Username and password are not set, DockerHub limits will be checked for external ip (Anonymous user)')
+        account_dict = {'': ''}
     else:
-        accounts_dict = {username: password}
-    return accounts_dict
+        account_dict = {username: password}
+    return account_dict
 
 
 def main():
