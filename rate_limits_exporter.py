@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import aiohttp
 from aiohttp import web
 import asyncio
@@ -14,10 +15,14 @@ def parse_args():
     # You may either use command line argument or env variables
     parser = argparse.ArgumentParser(prog='rate_limits_exporter',
                                      description='Docker Hub rate limits exporter for Prometheus')
-    parser.add_argument('-d', '--directory',
-                        default=os.getenv('APP_SECRETS_DIR', '/opt/secrets/'),
+    parser.add_argument('-u', '--username',
+                        default=os.getenv('APP_DOCKERHUB_USERNAME', ''),
                         type=str,
-                        help='Directory with files. The name of file - username of DockerHub, file content - password. (default: /opt)')
+                        help='DockerHub username. (default: "")')
+    parser.add_argument('-d', '--password',
+                        default=os.getenv('APP_DOCKERHUB_PASSWORD', ''),
+                        type=str,
+                        help='Password (or, better - token) of DockerHub account. (default: "")')
     parser.add_argument('-p', '--port',
                         default=os.getenv("APP_PORT", 8080),
                         type=int,
@@ -40,7 +45,7 @@ class DockerHubClient:
         self.limits_url = limits_url
 
     async def client_handler(self, username, password):
-        # we have to renew token before each request because for some reasons Docker Hub
+        # we have to renew token before each request because for some reason, Docker Hub
         # doesn't return required headers several minutes before token expiration
         # while status code is 200 (not 401)
         token_str = await self.get_token(username=username, password=password)
@@ -140,7 +145,7 @@ class Metrics:
 
         if 'ratelimit-limit' in headers_dict and 'ratelimit-remaining' in headers_dict:
             logger.debug('Headers returned successfully. Configuring metrics...')
-            # headers strings look like 100;w=21600. We need the first number
+            # header strings look like 100;w=21600 - we need the first number
             ratelimit_limit = re.search(r'^\d*', headers_dict['ratelimit-limit']).group()
             ratelimit_remaining = re.search(r'^\d*', headers_dict['ratelimit-remaining']).group()
             metrics_dict['dockerhub_ratelimit_current'] += f'dockerhub_ratelimit_current{{{labels_str}}} {ratelimit_limit}\n'
@@ -209,37 +214,26 @@ async def background_task(app):
         await asyncio.sleep(app['args'].time)
 
 
-def read_files_with_secrets(path):
-    """
-    :param path: each filename in the directory have to be a DockerHub account name. File data is a password
-    :return: dict with username : password pairs or empty dict if directory is empty
-    """
-    accounts_dict = {}
-    try:
-        files_list = os.listdir(path=path)
-        if not files_list:
-            logger.info(f'Directory {path} is empty. Skipping reading files. DockerHub limits will be checked for external ip')
-        else:
-            for file_name in files_list:
-                full_file_path = f'{path}/{file_name}'
-                logger.info(f'Reading file {full_file_path}')
-                # read file data with trailing characters removed
-                file_data = open(full_file_path).read().rstrip()
-                accounts_dict[file_name] = file_data
-    except OSError as error:
-        logger.warning(f'Could not list files in directory {path}: {error}')
-
-    if not accounts_dict:
-        # we have not to return empty dict if dir is empty. The dict {'': ''} is not empty
-        accounts_dict = {'': ''}
-    return accounts_dict
+def handle_credentials(username: str, password: str):
+    if username and not password:
+        logger.error(f'Password for {username} account is not set!')
+        sys.exit()
+    elif not username and password:
+        logger.error('Password is not empty while username is not set!')
+        sys.exit()
+    elif not username and not password:
+        logger.info('Username and password are not set, DockerHub limits will be checked for external ip (Anonymous user)')
+        account_dict = {'': ''}
+    else:
+        account_dict = {username: password}
+    return account_dict
 
 
 def main():
     args = parse_args()
     app = web.Application()
     # For storing global-like variables, feel free to save them in an Application instance
-    app['accounts_dict'] = read_files_with_secrets(args.directory)  # {'username1': 'password1', {username2}: ...}
+    app['accounts_dict'] = handle_credentials(args.username, args.password)  # {'username': 'password'}
     app['metrics_str'] = 'Initialization'
     app['args'] = args
     app.add_routes([

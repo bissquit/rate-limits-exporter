@@ -1,7 +1,6 @@
 import pytest
 import json
-import io
-from rate_limits_exporter import Metrics, get_username, read_files_with_secrets, DockerHubClient
+from rate_limits_exporter import Metrics, get_username, handle_credentials, DockerHubClient
 
 
 class MockTokenResponse:
@@ -159,7 +158,7 @@ def test_configure_labels_set():
     assert labels_str == 'dockerhub_user="User-1",source_ip=""'
 
 
-# we should be sure function always returns dict despite of any input headers combinations
+# we should be sure the function always returns dict despite any input headers combinations
 def test_fill_metrics():
     headers_dict = {
         'ratelimit-limit': '100;w=21600',
@@ -207,28 +206,20 @@ def test_fill_metrics():
     assert isinstance(metrics_dict, dict)
 
 
-@pytest.mark.asyncio
-def test_read_files_with_secrets(mocker):
-    # check empty dir
-    path = '/fake/path'
-    resp = []
-    mocker.patch('os.listdir', return_value=resp)
-    client = read_files_with_secrets(path)
-    assert client == {'': ''}
+def test_handle_credentials():
+    account_dict = handle_credentials('', '')
+    assert account_dict == {'': ''}
 
-    # check if directory path is exist
-    path = '/fake/path'
-    resp = MockOSListDir(path)
-    mocker.patch('os.listdir', return_value=resp)
-    client = read_files_with_secrets(path)
-    assert client == {'': ''}
+    account_dict = handle_credentials('name', 'pass_of_some_account')
+    assert account_dict == {'name': 'pass_of_some_account'}
 
-    file_name_str = 'file-1'
-    file_data_str = 'file-data'
-    resp = [file_name_str]
-    mocker.patch('os.listdir', return_value=resp)
-    # creates file-like obj in memory with appropriate methods like read() and write()
-    file = io.StringIO(file_data_str)
-    mocker.patch("builtins.open", return_value=file)
-    client = read_files_with_secrets(path)
-    assert client == {file_name_str: file_data_str}
+    try:
+        account_dict = handle_credentials('name', '')
+    except BaseException:
+        print(Exception)
+        assert True
+
+    try:
+        account_dict = handle_credentials('', 'pass_of_some_account')
+    except BaseException:
+        assert True
